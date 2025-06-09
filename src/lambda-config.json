@@ -1,0 +1,15 @@
+{
+  "FunctionName": "mss-stock-data-source",
+  "Runtime": "nodejs18.x",
+  "Handler": "index.handler",
+  "MemorySize": 128,
+  "Timeout": 15,
+  "Environment": {
+    "Variables": {
+      "ALPHAVANTAGE_API_KEY": "value-from-secrets-or-cicd",
+      "SHARED_BUILD_DATA_BUCKET": "mss-s3bucket-shared-build-data",
+      "AWS_REGION": "eu-north-1"
+    }
+  },
+  "Role": "arn:aws:iam::YOUR_ACCOUNT_ID:role/mss_role"
+}

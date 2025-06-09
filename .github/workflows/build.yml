@@ -1,0 +1,48 @@
+name: Build Lambda Artifact
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  SHARED_BUILD_DATA_BUCKET: ${{ vars.SHARED_BUILD_DATA_BUCKET }}
+  MSS_STOCK_DATA_TO_DYNAMO_LAMBDA_NAME: ${{ vars.MSS_STOCK_DATA_TO_DYNAMO_LAMBDA_NAME }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        working-directory: src
+        run: npm ci
+
+      - name: Get version from package.json
+        working-directory: src
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Zip build artifact
+        working-directory: src
+        run: zip -r mss-stock-data-to-dynamo.zip .
+
+      - name: Upload artifact to shared S3 bucket
+        working-directory: src
+        run: aws s3 cp mss-stock-data-to-dynamo.zip s3://$SHARED_BUILD_DATA_BUCKET/deploy/mss-stock-data-to-dynamo/${{ steps.version.outputs.version }}/$MSS_STOCK_DATA_TO_DYNAMO_LAMBDA_NAME.zip
