@@ -1,5 +1,5 @@
 {
-  "name": "mss-stock-data-source",
+  "name": "mss-stock-data-to-dynamo",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
