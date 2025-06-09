@@ -1,7 +1,7 @@
 // index.js
 import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, GetItemCommand, PutItemCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
-import { unmarshall, marshall } from '@aws-sdk/util-dynamodb';
+import { marshall } from '@aws-sdk/util-dynamodb';
 import zlib from 'zlib';
 
 const s3 = new S3Client();
@@ -31,9 +31,20 @@ export const handler = async (event) => {
 
     const tickWrites = [];
     for (const symbol of Object.keys(data)) {
-      const meta = data[symbol]['Meta Data'];
-      const interval = meta['4. Interval'];
-      const timeSeries = data[symbol][`Time Series (${interval})`];
+      // Find the time series key dynamically
+      const tsKey = Object.keys(data[symbol]).find(k => k.startsWith('Time Series'));
+      if (!tsKey) continue;
+      const timeSeries = data[symbol][tsKey];
+
+      // Calculate interval in minutes if possible
+      let interval = null;
+      const timestamps = Object.keys(timeSeries).sort();
+      if (timestamps.length >= 2) {
+        const t1 = new Date(timestamps[0]);
+        const t2 = new Date(timestamps[1]);
+        interval = Math.abs((t2 - t1) / (1000 * 60)); // in minutes
+      }
+
       for (const timestamp of Object.keys(timeSeries)) {
         // Check if tick already exists
         const tickCheck = await dynamodb.send(new GetItemCommand({
@@ -48,11 +59,11 @@ export const handler = async (event) => {
             Item: marshall({
               symbol,
               timestamp,
-              open: Number(tick['1. open']),
-              high: Number(tick['2. high']),
-              low: Number(tick['3. low']),
-              close: Number(tick['4. close']),
-              volume: Number(tick['5. volume']),
+              open: tick['1. open'] ? Number(tick['1. open']) : null,
+              high: tick['2. high'] ? Number(tick['2. high']) : null,
+              low: tick['3. low'] ? Number(tick['3. low']) : null,
+              close: tick['4. close'] ? Number(tick['4. close']) : null,
+              volume: tick['5. volume'] ? Number(tick['5. volume']) : null,
               interval,
               file_name: key
             })
