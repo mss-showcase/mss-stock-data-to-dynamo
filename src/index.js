@@ -65,7 +65,8 @@ export const handler = async (event) => {
               close: tick['4. close'] ? Number(tick['4. close']) : null,
               volume: tick['5. volume'] ? Number(tick['5. volume']) : null,
               interval,
-              file_name: key
+              file_name: key,
+              ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // 30 days from now
             })
           }
         });
@@ -83,7 +84,11 @@ export const handler = async (event) => {
     // Mark file as imported
     await dynamodb.send(new PutItemCommand({
       TableName: FILES_TABLE,
-      Item: marshall({ file_name: key, imported_at: new Date().toISOString() })
+      Item: marshall({
+        file_name: key,
+        imported_at: new Date().toISOString(),
+        ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // 30 days from now
+      })
     }));
 
     // Delete file from S3
