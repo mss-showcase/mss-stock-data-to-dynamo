@@ -9,6 +9,7 @@ const dynamodb = new DynamoDBClient();
 
 const FILES_TABLE = process.env.FILES_TABLE;
 const TICKS_TABLE = process.env.TICKS_TABLE;
+const FUNDAMENTALS_TABLE = process.env.FUNDAMENTALS_TABLE;
 
 export const handler = async (event) => {
   for (const record of event.Records) {
@@ -26,8 +27,42 @@ export const handler = async (event) => {
 };
 
 async function processFundamentalsFile(bucket, key) {
-  // Placeholder for future logic; do nothing for now
-  return;
+  // Download and decompress
+  const s3obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const body = await streamToBuffer(s3obj.Body);
+  const jsonStr = zlib.gunzipSync(body).toString('utf-8');
+  const data = JSON.parse(jsonStr);
+
+  // Extract as_of timestamp from filename (ISO format)
+  // Example: magnificent7-fundamentals-2025-06-17T21_36_09.840Z.json.gz
+  const match = key.match(/^magnificent7-fundamentals-(.+)\.json\.gz$/);
+  const as_of = match ? match[1].replace(/_/g, ':').replace(/T(\d{2}):(\d{2}):(\d{2})\.(\d{3})Z/, (m, h, m2, s, ms) => `T${h}:${m2}:${s}.${ms}Z`) : new Date().toISOString();
+
+  const writes = [];
+  for (const symbol of Object.keys(data)) {
+    const fundamentals = data[symbol];
+    // Compose item with symbol, as_of, all fields, and 30 days TTL
+    writes.push({
+      PutRequest: {
+        Item: marshall({
+          symbol,
+          as_of,
+          ...fundamentals,
+          ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // 30 days from now
+        })
+      }
+    });
+  }
+
+  // Batch write (25 items per batch)
+  let i = 0;
+  while (i < writes.length) {
+    const batch = writes.slice(i, i + 25);
+    await dynamodb.send(new BatchWriteItemCommand({
+      RequestItems: { [FUNDAMENTALS_TABLE]: batch }
+    }));
+    i += 25;
+  }
 }
 
 
