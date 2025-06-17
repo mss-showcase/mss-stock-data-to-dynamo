@@ -63,6 +63,12 @@ async function processFundamentalsFile(bucket, key) {
     }));
     i += 25;
   }
+
+  // Delete file from S3 after processing
+  await s3.send(new DeleteObjectCommand({
+    Bucket: bucket,
+    Key: key
+  }));
 }
 
 
